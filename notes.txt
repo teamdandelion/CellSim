@@ -1,0 +1,40 @@
+class Cell
+    update()
+    die()
+    photosynthesize()
+    divide()
+    specialize
+
+
+RootCell inherits Cell
+    type = 'ROOT'
+    water_factor = 1
+    water_max_xfer = 100
+    water_max_store = 500
+    spec_cost_sugar = 50
+    spec_cost_water = 0
+
+PhotoCell inherits Cell
+    type = 'PHOTO'
+    photo_factor = 1
+    water_consumption = 2
+    water_max_xfer = 10
+    sugar_max_xfer = 50
+    sugar_max_store = 200
+    spec_cost_sugar = 50
+    spec_cost_water = 50
+    
+VascularCell inherits Cell
+    type = 'VASCULAR'
+    self.water_max_xfer = 500
+    self.water_max_store = 500
+    self.sugar_max_xfer = 500
+    self.sugar_max_store = 500
+    
+SeedCell inherits Cell
+    type = 'SEED'
+    self.water_max_xfer = 0
+    self.water_max_store = 100
+    self.sugar_max_xfer = 0
+    self.sugar_max_store = 10000
+StoreCell inherits Cell
