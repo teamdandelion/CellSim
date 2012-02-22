@@ -3,6 +3,9 @@ WATER_FACTOR = 1
 COST_REPR_SUGAR = 10
 COST_REPR_WATER = 10
 
+SPEC_COSTS = {'ROOT': (50, 0), 'PHOTO': (50, 50), 'VASCULAR': (25, 25), 
+                                'SEED': (50, 20), 'STORE': (90, 90)}
+
 
 class Cell:
     def __init__(self, coordinate, init_sugar, init_water):

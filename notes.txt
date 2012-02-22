@@ -30,11 +30,24 @@ VascularCell inherits Cell
     self.water_max_store = 500
     self.sugar_max_xfer = 500
     self.sugar_max_store = 500
+    cost sugar = 25
+    cost water = 25
     
 SeedCell inherits Cell
     type = 'SEED'
     self.water_max_xfer = 0
-    self.water_max_store = 100
+    self.water_max_store = 0
     self.sugar_max_xfer = 0
-    self.sugar_max_store = 10000
+    self.sugar_max_store = 100000
+    self.sugar_consumption = 0
+    cost water = 20
+    cost sugar = 50
+    
 StoreCell inherits Cell
+    type = 'STORE'
+    self.water_max_xfer = 500
+    self.water_max_store = 5000
+    self.sugar_max_xfer = 500
+    self.sugar_max_store = 5000
+    self.water_consumption = 5
+    self.sugar_consumption = 5
