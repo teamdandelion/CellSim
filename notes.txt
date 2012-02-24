@@ -51,3 +51,50 @@ StoreCell inherits Cell
     self.sugar_max_store = 5000
     self.water_consumption = 5
     self.sugar_consumption = 5
+    
+    
+    {'S_CONSUMPTION': 0, 'S_XFER': 0,  'S_MAX': 100000, 
+			     'W_CONSUMPTION': 0, 'W_XFER': 0,  'W_MAX': 0,
+			      'PHOTO_FACTOR': 0, 'WATER_FACTOR': 0}
+
+
+
+
+CELL:
+	init(self, world, type, init_sugar, init_water)√
+		world.get_light
+		world.get_water
+		world.get_adjacent
+		world.get_messages
+		world.get_free_spaces
+	set_type_characteristics √
+	update_self_state √
+	update_world_state √
+	die √
+		world.remove_cell
+	photosynthesize √
+	divide √
+		world.add_daughter(self,dir, s_xfer, w_xfer)
+	specialize √
+	xfer_sugar x
+	xfer_water x
+	
+ENVIRONMENT:
+	init
+	
+	add_cell
+	get_water
+	get_light
+	get_adjacent
+	get_free_space
+	add_daughter
+	remove_cell
+	
+
+
+
+
+
+
+
+
