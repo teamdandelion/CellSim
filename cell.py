@@ -1,37 +1,7 @@
 PHOTO_MULT = 1
 WATER_MULT = 1 
-COST_REPR_SUGAR = 10
-COST_REPR_WATER = 10
 
-SPEC_COSTS = {'ROOT': (100, 0), 'PHOTO': (100, 100), 'VASCULAR': (25, 25), 
-                                'STORE': (150, 150), 'SEED': (200, 20)}
-
-GENERIC_INFO =  {'S_CONSUMPTION': 1, 'S_XFER': 20, 'S_MAX': 200, 
-                 'W_CONSUMPTION': 0, 'W_XFER': 20, 'W_MAX': 200,
-                  'PHOTO_FACTOR': 0, 'WATER_FACTOR': 0}
-
-ROOT_INFO   =   {'S_CONSUMPTION': 1, 'S_XFER': 40, 'S_MAX': 200, 
-                 'W_CONSUMPTION': 0, 'W_XFER': 100,'W_MAX': 600,
-                  'PHOTO_FACTOR': 0, 'WATER_FACTOR': 1}
-                
-PHOTO_INFO  =   {'S_CONSUMPTION': 1, 'S_XFER': 100,'S_MAX': 500, 
-                 'W_CONSUMPTION': 5, 'W_XFER': 20, 'W_MAX': 200,
-                  'PHOTO_FACTOR': 1, 'WATER_FACTOR': 0}
-
-VASCULAR_INFO = {'S_CONSUMPTION': 1, 'S_XFER': 200,'S_MAX': 400, 
-                 'W_CONSUMPTION': 1, 'W_XFER': 200,'W_MAX': 200,
-                  'PHOTO_FACTOR': 0, 'WATER_FACTOR': 0}
-                
-STORE_INFO  =   {'S_CONSUMPTION': 3, 'S_XFER': 400,'S_MAX': 800, 
-                 'W_CONSUMPTION': 3, 'W_XFER': 400,'W_MAX': 400,
-                  'PHOTO_FACTOR': 0, 'WATER_FACTOR': 0}     
-                
-SEED_INFO   =   {'S_CONSUMPTION': 0, 'S_XFER': 0,  'S_MAX': 10000, 
-                 'W_CONSUMPTION': 0, 'W_XFER': 0,  'W_MAX': 500,
-                  'PHOTO_FACTOR': 0, 'WATER_FACTOR': 0}
-
-TYPES_INFO = {'GENERIC': GENERIC_INFO, 'ROOT': ROOT_INFO, 'PHOTO': PHOTO_INFO, 
-              'VASCULAR': VASCULAR_INFO, 'STORE': STORE_INFO, 'SEED': SEED_INFO}
+from cell_types import COSTS, TYPES_INFO
 
 class Cell:
     def __init__(self, world, type, init_sugar, init_water):
@@ -126,10 +96,11 @@ class Cell:
         if self.adjacent[direction] == None:
             avail_sugar = self.sugar_store - self.sugar_used
             avail_water = self.water_store - self.water_used
-            if avail_sugar >= sugar_transfer + COST_REPR_SUGAR and \
-                    avail_water >= water_transfer + COST_REPR_SUGAR:
-                  self.sugar_used += sugar_transfer + COST_REPR_SUGAR
-                  self.water_used += water_transfer + COST_REPR_WATER
+            sugar_cost, water_cost = COSTS['REPR']
+            if avail_sugar >= sugar_transfer + sugar_cost and \
+                    avail_water >= water_transfer + water_cost:
+                  self.sugar_used += sugar_transfer + sugar_cost
+                  self.water_used += water_transfer + water_cost
                   self.world.add_daughter(self, direction, sugar_transfer, water_transfer)
                   return 0
         return 1
@@ -164,6 +135,7 @@ class Environment:
         self.coordinates = {}
         # A dictionary used to track cell coordinates, in form (cell: coordinate)
         # Between the two we have a bijective mapping from cells to coordinates
+        self.cycles = 0
         "Initialize a seed cell"
         seedCell = Cell(self, 'SEED', 500, 500)
         self.add_cell(seedCell, (0,-5))
@@ -244,7 +216,24 @@ class Environment:
         del self.coordinates[cell]
         del self.cells[coordinate]
         
+    def update_cells(self):
+        self.cycles += 1
+        # Once a program is written for managing a cell (e.g. the grass program)
+        # Add an action loophere
+        # The coordinates dict is index by cells, so if we ignore the values, it's a bit like
+        # accessing a list
+        for cell in self.coordinates.copy(): 
+            cell.update_self_state()
+            # This might remove cells due to death, so we iterate over a copy
+        
+        for cell in self.coordinates:
+            cell.update_world_state()
+            # No risk of cell removal at this point, they are just updating their global info    
+            
+        
+        
 #For testing purposes...
 
 world = Environment()
 c1 = world.cells[(0,-5)]
+c1.divide('DOWN', 200, 200)
