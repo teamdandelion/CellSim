@@ -2,8 +2,15 @@ PHOTO_MULT = 1
 WATER_MULT = 1 
 
 from cell_types import COSTS, TYPES_INFO
+from random import randint
 
-class Cell:
+import pygame
+from pygame import Rect, Color
+from pygame.sprite import Sprite
+# This import pattern, and useage of pygame in this program, is based
+# on Eli Bendersky's excellent pygame tutorial (eli.thegreenplace.net)
+
+class Cell(object):
     def __init__(self, world, type, init_sugar, init_water):
         self.type = type        
         self.set_type_characteristics()
@@ -30,6 +37,8 @@ class Cell:
         self.message = {}
             # A dictionary of messages that other cells can access. Contents defined by 
             # the 'DNA' implementation.
+    def __repr__(self):
+        return "<" + self.type + str(self.world.coordinates[self]) + ">"
 
     def set_type_characteristics(self):
         info = TYPES_INFO[self.type]
@@ -128,7 +137,7 @@ class Cell:
             self.world.transfer(self, direction, sugar, water)
 
 
-class Environment:
+class Environment(object):
     def __init__(self):
         self.cells = {} 
         # A dictionary is used to track cells, in form (coordinate: cell)     

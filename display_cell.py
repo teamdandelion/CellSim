@@ -34,8 +34,6 @@ pygame.draw.polygon(windowSurface, SKY, ((0, 0), (0, 200), (500, 200), (500, 0))
 pixArray = pygame.PixelArray(windowSurface)
 
 
-
-
 pixArray[480][380] = BLACK
 del pixArray
 # draw the text onto the surface

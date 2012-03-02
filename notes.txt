@@ -71,7 +71,7 @@ CELL:
 	update_self_state √
 	update_world_state √
 	die √
-		world.remove_cell
+		world.remove_cell √
 	photosynthesize √
 	divide √
 		world.add_daughter(self,dir, s_xfer, w_xfer)
@@ -82,13 +82,13 @@ CELL:
 ENVIRONMENT:
 	init
 	
-	add_cell
-	get_water
-	get_light
-	get_adjacent
-	get_free_space
-	add_daughter
-	remove_cell
+	add_cell √
+	get_water √
+	get_light √
+	get_adjacent √
+	get_free_space √
+	add_daughter √
+	remove_cell √
 	
 
 
