@@ -35,14 +35,16 @@ class Cell(Sprite):
         "RESOURECE INITIALIZATION"
         self.sugar_store = init_sugar
             # Baseline sugar use per turn
-        self.sugar_used = self.sugar_consumption 
+        self.sugar_avail = init_sugar
+        self.sugar_avail -= self.sugar_consumption 
             # Tracks the total sugar use throughout the cycle to ensure that the cell can't 
             # overextend itself and cheat by sending / expending more resources than it has
         self.sugar_incoming = 0
         self.sugar_sent = 0
             # How much it is receiving from other cells or photosynthesis
         self.water_store = init_water
-        self.water_used = 0
+        self.water_avail = 0
+        self.water_avail -= self.water_consumption
         self.water_incoming = 0
         self.water_sent = 0
                 
@@ -50,9 +52,7 @@ class Cell(Sprite):
         self.message = {}
             # A dictionary of messages that other cells can access. Contents defined by 
             # the 'DNA' implementation.
-    
-    def takeAction(self):self.program()
-        
+            
     def __repr__(self):
         return "<" + self.type + str(self.world.coordinates[self]) + ">"
 
@@ -69,23 +69,24 @@ class Cell(Sprite):
 
     def update_self_state(self):
         '''Updates a cell's internal characteristics, such as sugar and water stores'''
-        self.sugar_store -= self.sugar_used
+        self.sugar_store = self.sugar_avail
         self.sugar_store += self.sugar_incoming
-        self.sugar_used = self.sugar_consumption
         self.sugar_incoming = 0
         self.sugar_sent = 0
         if self.sugar_store > self.sugar_max_store:
-            self.sugar_store = self.sugar_max_store    
-            
-        self.water_store -= self.water_used
+            self.sugar_store = self.sugar_max_store      
+        self.sugar_avail = self.sugar_store
+        self.sugar_avil -= self.sugar_consumption
+        
+        self.water_store = self.water_avail
         self.water_store += self.water_incoming
-        self.water_store += self.water_factor * self.water * self.free_spaces
-        self.water_used = self.water_consumption
         self.water_incoming = 0
         self.water_sent = 0
         if self.water_store > self.water_max_store:
-            self.water_store = self.water_max_store
-            
+            self.water_store = self.water_max_store      
+        self.water_avail = self.water_store
+        self.water_avil -= self.water_consumption
+
         if self.sugar_store < 0 or self.water_store < 0:
             if self.starving:
                 self.die()
@@ -113,20 +114,19 @@ class Cell(Sprite):
     def photosynthesize(self):
         if not self.used_photo: 
             amount = self.light * self.free_spaces * self.photo_factor
-            self.water_used += amount
+            self.water_avail -= amount
             self.sugar_incoming += amount
             self.used_photo = True
         # Currently water converted to sugar at 1:1 ratio.
     
-    def divide(self, direction, water_transfer, sugar_transfer, newMemory):
+    def divide(self, direction, water_transfer, sugar_transfer, newMemory={}):
         if self.adjacent[direction] == None:
-            avail_sugar = self.sugar_store - self.sugar_used
-            avail_water = self.water_store - self.water_used
+        
             sugar_cost, water_cost = COSTS['REPR']
-            if avail_sugar >= sugar_transfer + sugar_cost and \
-                    avail_water >= water_transfer + water_cost:
-                  self.sugar_used += sugar_transfer + sugar_cost
-                  self.water_used += water_transfer + water_cost
+            if self.sugar_avail >= sugar_transfer + sugar_cost and \
+                    self.water_avail >= water_transfer + water_cost:
+                  self.sugar_avail -= sugar_transfer + sugar_cost
+                  self.water_avail -= water_transfer + water_cost
                   self.world.add_daughter(self, direction, sugar_transfer, water_transfer, newMemory)
                   return 0
         return 1
@@ -134,23 +134,22 @@ class Cell(Sprite):
     def specialize(self, new_type):
         if self.type == 'GENERIC':
             sugar_cost, water_cost = SPEC_COSTS[new_type]
-            if self.water_store - self.water_used - water_cost > 0 and self.sugar_store - \
-                                  self.sugar_used - sugar_cost > 0:
-                self.sugar_used += sugar_cost
-                self.water_used += water_cost
+            if self.water_avail > water_cost and self.sugar_avail > sugar_cost:
+                self.sugar_avail -= sugar_cost
+                self.water_avail -= water_cost
                 self.type = new_type
                 self.set_type_characteristics()
                 
     def transfer(self, direction, sugar, water):
         if self.adjacent[direction] != None:
-            sugar = min(sugar, self.sugar_store - self.sugar_used, self.sugar_max_xfer - self.sugar_sent)
-            water = min(water, self.water_store - self.water_used, self.water_max_xfer - self.water_sent)
+            sugar = min(sugar, self.sugar_avail, self.sugar_max_xfer - self.sugar_sent)
+            water = min(water, self.water_avail, self.water_max_xfer - self.water_sent)
             # Makes sure that the cell can't send more than its xfer limit, and that it can't
             # reduce its store below 0
-            self.sugar_used += sugar
-            self.sugar_sent += sugar
-            self.water_used += water
-            self.water_sent += water
+            self.sugar_avail -= sugar
+            self.sugar_sent  += sugar
+            self.water_avail -= water
+            self.water_sent  += water
             self.world.transfer(self, direction, sugar, water)
 
 

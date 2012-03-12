@@ -6,35 +6,35 @@ grass_initial_memory = {'INITIALIZE': 1}
 def grass(cell):
     if cell.type == 'ROOT':
         if cell.adjacent['RIGHT'] != None:
-            cell.transfer('RIGHT', 0, cell.water_store)
+            cell.transfer('RIGHT', 0, cell.water_avail)
         elif cell.adjacent['LEFT'] != None:
-            cell.transfer('LEFT', 0, cell.water_store)
+            cell.transfer('LEFT', 0, cell.water_avail)
             
     if cell.type == 'PHOTO':
-        if cell.water_store > 20 and cell.sugar_store + 20 < cell.sugar_max_store:
+        if cell.water_avail > 30 and cell.sugar_avail + 20 < cell.sugar_max_avail:
             cell.photosynthesize()
         if cell.adjacent['RIGHT'] != None:
-            cell.transfer('RIGHT', (cell.sugar_store-20), 0)
+            cell.transfer('RIGHT', (cell.sugar_avail - 20), 0)
         elif cell.adjacent['LEFT'] != None:
-            cell.transfer('RIGHT', (cell.sugar_store-20), 0)
+            cell.transfer('RIGHT', (cell.sugar_avail - 20), 0)
             
     if cell.type == 'VASCULAR':
         if cell.light > 0:
-            if cell.water_store > 25:
+            if cell.water_avail > 25:
                 if cell.adjacent['RIGHT'] in ('GENERIC', 'PHOTO')
                     cell.transfer('RIGHT', 0, 10)
                 if cell.adjacent['LEFT'] in ('GENERIC', 'PHOTO')
                     cell.transfer('LEFT', 0, 10)
-            if cell.water_store - cell.water_used > 10:
-                cll.transfer('UP', 0, cell.water_store - cell.water_used - 10)
+            if cell.water_avail > 10:
+                cll.transfer('UP', 0, cell.water_avail - 10)
                 
-            if cell.sugar_store > 25:
+            if cell.sugar_avail > 25:
                 if cell.adjacent['RIGHT'] in ('GENERIC', 'ROOT'):
                     cell.transfer('RIGHT', 10, 0)
                 if cell.adjacent['LEFT'] in ('GENERIC', 'ROOT'):
                     cell.transfer('LEFT', 10, 0)
-            if cell.sugar_store - cell.sugar_used > 10:
-                cll.transfer('DOWN', cell.sugar_store - cell.sugar_used - 10, 0)
+            if cell.sugar_avail > 10:
+                cll.transfer('DOWN', cell.sugar_avail - 10, 0)
     
     if cell.type == 'STORE':
         if 'INITIALIZE' in cell.memory:
@@ -43,7 +43,7 @@ def grass(cell):
                 cell.divide('UP', 240, 350, {'role': 'stem'})
                 cell.divide('DOWN', 240, 130, {'role': 'rootstem'})
     
-        elif cell.water_store + 10 > cell.water_max_store and cell.sugar_store + 10 > cell.sugar_max_store:
+        elif cell.water_avail + 10 > cell.water_max_store and cell.sugar_avail + 10 > cell.sugar_max_store:
             if 'made seed' not in cell.memory:
             cell.memory['made seed']='left'
             cell.divide('LEFT', 220, 40, {'role': 'SEED'})
@@ -51,8 +51,8 @@ def grass(cell):
                 cell.transfer('LEFT', 300, 20)
             
         else:
-            cell.transfer('DOWN', cell.sugar_store - cell.sugar_used - 30, 0)
-            cell.transfer('UP'  , 0, cell.water_store - cell.water_used - 30)
+            cell.transfer('DOWN', cell.sugar_avail - 30, 0)
+            cell.transfer('UP'  , 0, cell.water_avail - 30)
         
     if cell.type == 'SEED':
         pass
