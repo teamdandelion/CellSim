@@ -2,7 +2,7 @@
 import os, sys
 
 from cell_types import COSTS, TYPES_INFO
-from cell_programs import grass
+from DNA import grass
 from random import randint
 from pdb import set_trace as debug
 
@@ -29,7 +29,7 @@ class Cell:
         
         self.type = type
         self.set_type_characteristics()
-
+        self.debug = []
         self.memory = initMemory
         # The cell's internal memory. Can be accessed by other cells
         self.alive = True
@@ -74,6 +74,7 @@ class Cell:
             self.sugar = self.sugar_max      
         
         self.water += self.water_incoming
+        self.water += self.h2o * self.water_factor
         self.water_incoming = 0
         self.water_sent = 0
         self.water -= self.water_consumption
@@ -90,8 +91,8 @@ class Cell:
     def update_world_state(self):
         """Updates a cell's information about the external environment, such as adjacent cells"""
         # We need to seperate this from update_self_state because a cell may die during the self_state update, and we don't want dead cells to appear in the adjacency lists
-        self.light_intensity = self.world.get_light(self)
-        self.water_intensity = self.world.get_water(self)
+        self.light = self.world.get_light(self)
+        self.h2o = self.world.get_water(self)
         # Get light and water values each cycle because they may change (with the weather)
         self.adjacent = self.world.get_adjacent(self)
         self.free_spaces = self.world.get_free_spaces(self)
@@ -105,7 +106,7 @@ class Cell:
     def photosynthesize(self):
         """Converts water into sugar, if the cell is photosynthetic and there's light and free adjacent spaces"""
         if not self.used_photo: 
-            amount = self.light_intensity * self.free_spaces * self.photo_factor
+            amount = self.light * self.free_spaces * self.photo_factor
             self.water -= amount
             self.sugar += amount
             self.used_photo = True
@@ -117,6 +118,8 @@ class Cell:
         New cell starts with specified sugar and water, and memory initialized to newMemory. Note division has additional costs (specified in cell_types.py as COSTS['REPR']). 
         If the cell doesn't have enough water or sugar for the division, then division will fail but resources will not be lost.
         """
+        sugar_transfer = max(0, sugar_transfer)
+        water_transfer = max(0, water_transfer)
         if self.adjacent[direction] == 'EMPTY':
             sugar_cost, water_cost = COSTS['REPR']
             if self.sugar >= sugar_transfer + sugar_cost and \
@@ -130,18 +133,21 @@ class Cell:
     def specialize(self, new_type):
         """Generic cells can specialize into a new type of cell."""
         if self.type == 'GENERIC':
-            sugar_cost, water_cost = SPEC_COSTS[new_type]
+            sugar_cost, water_cost = COSTS[new_type]
             if self.water > water_cost and self.sugar > sugar_cost:
                 self.sugar -= sugar_cost
                 self.water -= water_cost
                 self.type = new_type
                 self.set_type_characteristics()
+                self.world.update_cell(self)
                 
     def transfer(self, direction, sugar, water):
         """Transfer sugar and/or water in given direction. 
         
         Limited by sugar, water available, the maximum transfer limits. If there is no cell in the given direction or that cell is already overloaded, then resources will be wasted.
         """
+        sugar = max(sugar, 0)
+        water = max(water, 0)
         if self.adjacent[direction] != 'EMPTY':
             sugar = min(sugar, self.sugar, self.sugar_max_xfer - self.sugar_sent)
             water = min(water, self.water, self.water_max_xfer - self.water_sent)
@@ -164,9 +170,8 @@ class Environment:
         # Between the two we have a bijective mapping from cells to coordinates
         self.cycles = 0
         # Keep track of the number of cycles that have passed
-        self.toDraw = [] # A list of cells that need to be drawn or updated on the screen
-        self.screen = screen
-        self.selected_cell = None
+        self.initiate_graphics(screen)
+
         
     def add_cell(self, cell, coordinate):
         """Adds given cell to the world at given coordinate. 
@@ -183,7 +188,7 @@ class Environment:
             self.cells[coordinate] = cell
             self.coordinates[cell] = coordinate
             cell.update_world_state() # Gives the cell adjacency list, etc
-            self.toDraw.append((cell, coordinate))
+            self.toDraw.append((coordinate, cell.color))
         
     def get_water(self, cell):
         """Returns the water density at a cell's location"""
@@ -251,13 +256,19 @@ class Environment:
         
     def remove_cell(self, cell):
         coordinate = self.coordinates[cell]
+        if self.selected_cell == cell:
+            self.selected_cell = None
+        if cell.h2o > 0: color = self.ground_color
+        else: color = self.sky_color
+        self.toDraw.append((coordinate, color))
+            
         del self.coordinates[cell]
         del self.cells[coordinate]
-        "Include something to remove dead cells from display."
         
     def update_cells(self):
         self.cycles += 1
         for cell in self.coordinates.copy():
+            cell.debug = []
             cell.program(cell)
         # The coordinates dict is index by cells, so if we ignore the values, it's a bit like accessing a list
         # Iterate over a copy because a cell could die
@@ -270,96 +281,134 @@ class Environment:
         self.updateDisplay()
         
     """Graphics functionality"""
-    def drawAllCells(self):
-        for coordinate, cell in self.coordinates.iteritems():
-            self.drawCell(cell, self.c2b(coordinate))
+    def initiate_graphics(self, screen):
+        self.screen = screen
+        self.selected_cell = None
+        self.sky_color = (0, 191, 255)
+        self.ground_color = (139, 69, 19)
+        self.u_offset = 0
+        self.v_offset = 0
+        self.x_axis = 380 # AKA ground level
+        self.y_axis = 300
+        self.toDraw = []
+        self.drawBackground()
+
+    def c2p(self, coordinate):
+        """Converts a cell coordinate into a pixel coordinate
+        
+        Specifically, returns the pixel coordinate designating the upper left-hand coordinate of the given cell.
+        """
+        x, y = coordinate
+        minU = self.y_axis + (x * GRID_SIZE)
+        minV = self.x_axis - ((y+1) * GRID_SIZE)
+        return (minU, minV)
+        
+    def p2c(self, pixel):
+        """Translate a pixel coordinate to a cell coordinate. Reverse of c2p"""
+        u,v = pixel
+        x = (u - self.y_axis) // GRID_SIZE
+        y = -(v - self.x_axis) // GRID_SIZE
+        return (x,y)
+     
+    def color_grid(self, coordinate, color):
+        """Colors a given coordinate (GRID_SIZE x GRID_SIZE square)"""
+        u,v = self.c2p(coordinate)
+        rect = (u, v, GRID_SIZE, GRID_SIZE)
+        pygame.draw.rect(screen, color, rect)
     
     def updateDisplay(self):
-        for cell, coordinate in self.toDraw:
-            self.drawCell(cell, self.c2b(coordinate))
+        for (coordinate, color) in self.toDraw:
+            self.color_grid(coordinate, color)
         self.toDraw = []
+
+    def update_cell(self, cell):
+        self.toDraw.append((self.coordinates[cell], cell.color))
     
     def drawBackground(self):
         """Draws background over coordinate space designated"""
-        pass
-    
-    def c2b(self, coordinate):
-        """Converts a coordinate within self.XBounds, self.YBounds into 
-            bounds for drawing on the screen"""
-        x, y = coordinate
-        minU = FIELD_WIDTH  / 2 + (x * GRID_SIZE)
-        minV = FIELD_HEIGHT / 2 + (y * GRID_SIZE)
-        return (minU, minV)
+        
+        sky_rect = (0, 0, SCREEN_WIDTH, self.x_axis)
+        ground_rect = (0, self.x_axis, SCREEN_WIDTH, SCREEN_HEIGHT - self.x_axis)
+        pygame.draw.rect(screen, self.sky_color, sky_rect)
+        pygame.draw.rect(screen, self.ground_color, ground_rect)
         
     def drawCell(self, cell, corner):
         minU, minV = corner
-        for u in xrange(GRID_SIZE):
-            for v in xrange(GRID_SIZE):
-                self.screen.set_at((u+minU, v+minV), cell.color)
+        if minU + GRID_SIZE < SCREEN_WIDTH and minV + GRID_SIZE < SCREEN_HEIGHT:
+            for u in xrange(GRID_SIZE):
+                for v in xrange(GRID_SIZE):
+                    self.screen.set_at((u+minU, minV-v), cell.color)
                 
     def draw_messageboard(self, screen, rect):
         box_color = (50, 20, 0)
         pygame.draw.rect(screen, box_color, rect)
-        my_font = pygame.font.SysFont('arial', 10)
+        my_font = pygame.font.SysFont('arial', 15)
+        big_font = pygame.font.SysFont('arial', 25)
         cell = self.selected_cell
         
         messages = []
-        message0 = "Cycles: " + str(self.cycles)
-        message1 = "(Select a cell)"
-        message2 = "Sugar: "
-        message3 = "Water: "
-        message4 = "Memory: \n"
-
-        if cell != None:
-            message1 = repr(cell)
-            message2 += str(cell.sugar)
-            message3 += str(cell.water)
-            for key, val in cell.memory.iteritems():
-                message4 += key + " : " + val + "\n"
-                
-        messages = [message0, message1, message2, message3, message4]
-
-        message0_sf = my_font.render(message0, True, Color('white'))
-        message1_sf = my_font.render(message1, True, Color('white'))
-        message2_sf = my_font.render(message2, True, Color('white'))
-        message3_sf = my_font.render(message3, True, Color('white'))
-        message4_sf = my_font.render(message4, True, Color('white'))
+        cyclecount = "Cycles: " + str(self.cycles)
+        cyclecount_sf = big_font.render(cyclecount, True, Color('white'))
         
+        if cell == None:
+            messages.append("No cell selected.")
+        else:
+            messages.append(repr(cell))
+            messages.append("Sugar: " + str(cell.sugar))
+            messages.append("Water: " + str(cell.water))
+            messages.append("Light: " + str(cell.light))
+            messages.append("H20 Density: " + str(cell.h2o))
+            for key, val in cell.memory.iteritems():
+                messages.append(key + " : " + val)
+            
+            messages.append("-----------")
+            for message in cell.debug:
+                messages.append(message)
+                
         messages_sf = []
         for message in messages:
             messages_sf.append(my_font.render(message, True, Color('white')))
         
         offset = 0
         for message in messages_sf:
-            screen.blit(message, rect.move(0, offset))
+            screen.blit(message, rect.move(15, offset))
             offset += message.get_height()
+
+        screen.blit(cyclecount_sf, rect.move(15, 500))
         
-#         screen.blit(message0_sf, rect)
-#         screen.blit(message1_sf, rect.move(0, message0_sf.get_height()))
-#         screen.blit(message2_sf, rect.move(0, message1_sf.get_height()))
-#         screen.blit(message3_sf, rect.move(0, message2_sf.get_height()))
-#         screen.blit(message4_sf, rect.move(0, message3_sf.get_height()))
+    def change_selected_cell(self, pixel):
+        """Takes the pixel coordinate of a mouse click, and changes selected cell to match the object at that location."""
+        x,y = self.p2c(pixel)
+        print str((x,y)), str(pixel)
+        if (x,y) in self.cells:
+            self.selected_cell = self.cells[(x,y)]
+        else:
+            self.selected_cell = None
 
 #For testing purposes...
 world = Environment(screen)
 pygame.init()
-seed_cell = Cell(world, grass, {'role':'origin'}, 'STORE', 500, 500)
+seed_cell = Cell(world, grass, {'role':'origin'}, 'STORE', 1000, 400)
 world.add_cell(seed_cell, (0, -5))
-world.selected_cell = seed_cell
 world.draw_messageboard(screen, MESSAGE_RECT)
-
 world.updateDisplay()
+pygame.display.flip()
 
 #debug()
 while running:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
-        if event.type == pygame.KEYDOWN:
+        elif event.type == pygame.KEYDOWN:
             if event.key == pygame.K_SPACE:
                 world.update_cells()
                 world.draw_messageboard(screen, MESSAGE_RECT)
                 pygame.display.flip()
+        elif (  event.type == pygame.MOUSEBUTTONDOWN and
+                pygame.mouse.get_pressed()[0]):
+            world.change_selected_cell(pygame.mouse.get_pos())
+            world.draw_messageboard(screen, MESSAGE_RECT)
+            pygame.display.flip()
 
     clock.tick(240)
     #debug()
