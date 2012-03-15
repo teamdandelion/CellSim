@@ -2,7 +2,7 @@
 import os, sys
 
 from cell_types import COSTS, TYPES_INFO
-from DNA import grass
+from dna import grass
 from random import randint
 from pdb import set_trace as debug
 
@@ -20,6 +20,13 @@ GRID_SIZE = 20
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 clock = pygame.time.Clock()
 running = True
+
+def adjacent_coords(x, y, dir=None):
+        adjacent = {'N': (x, y+1), 'NE': (x+1, y+1), 'E': (x+1, y), 'SE': (x+1, y-1), 'S': (x, y-1), 'SW': (x-1, y-1), 'W': (x-1, y), 'NW': (x-1, y+1)}
+        if (dir != None):
+            return adjacent[dir]
+        else:
+            return adjacent
 
 class Cell:
     """Represents a single cell, with a type, resources, functions that represent possible actions, a memory, and a program that animates it"""
@@ -103,7 +110,6 @@ class Cell:
         # Get light and water values each cycle because they may change (with the weather)
         self.adjacent = self.world.get_adjacent(self)
         self.free_spaces = self.world.get_free_spaces(self)
-        self.adjacentMessages = self.world.get_messages
                 
     def die(self):
         """Kills the cell. Useful to make space"""
@@ -164,7 +170,8 @@ class Cell:
             self.sugar_sent += sugar
             self.water_sent += water
             self.world.transfer(self, direction, sugar, water)
-
+        else:
+            print "Tried to transfer to empty coordinate."
 
 """===================================================================="""
 
@@ -213,8 +220,7 @@ class Environment:
         """Returns a dictionary of cells adjacent to the given cell."""
         x,y = self.coordinates[cell]
         adjacencies = {}
-        adjacent_coords = {'UP': (x, y+1), 'RIGHT': (x+1, y), 'DOWN': (x, y-1), 'LEFT': (x-1, y)}
-        for direction, coord in adjacent_coords.iteritems():
+        for direction, coord in adjacent_coords(x,y).iteritems():
             if coord in self.cells: # self.cells is indexed by coordinates
                 adjacencies[direction] = self.cells[coord]
             else:
@@ -224,27 +230,14 @@ class Environment:
     def get_free_spaces(self, cell):
         x,y = self.coordinates[cell]
         spaces = 0
-        adjacent_coords = ((x, y+1), (x+1, y), (x, y-1), (x-1, y))
-        for coord in adjacent_coords:
+        for coord in adjacent_coords(x,y).itervalues():
             if coord not in self.coordinates:
                 spaces += 1
         return spaces
-        
-    def get_messages(self, cell):
-        x, y = self.coordinates[cell]
-        messages = {}
-        adjacent_coords = {'UP': (x, y+1), 'RIGHT': (x+1, y), 'DOWN': (x, y-1), 'LEFT': (x-1, y)}
-        for direction, coord in adjacent_coords.iteritems():
-            if coord in self.coordinates:
-                messages[direction] = self.coordinates[coord].message
-            else:
-                adjacencies[direction] = None
-        return messages
-        
+
     def add_daughter(self, cell, direction, init_sugar, init_water, newMemory={}):
         x, y = self.coordinates[cell]
-        adjacent_coords = {'UP': (x, y+1), 'RIGHT': (x+1, y), 'DOWN': (x, y-1), 'LEFT': (x-1, y)}
-        coordinate = adjacent_coords[direction]
+        coordinate = adjacent_coords(x, y, direction)
         program = cell.program
         
         if coordinate not in self.coordinates:
@@ -253,8 +246,8 @@ class Environment:
             
     def transfer(self, cell, direction, sugar, water):
         x, y = self.coordinates[cell]
-        adjacent_coords = {'UP': (x, y+1), 'RIGHT': (x+1, y), 'DOWN': (x, y-1), 'LEFT': (x-1, y)}
-        coordinate = adjacent_coords[direction]
+
+        coordinate = adjacent_coords(x, y, direction)
         if coordinate in self.cells:
             target = self.cells[coordinate]
             target.sugar_incoming += sugar
@@ -366,7 +359,7 @@ class Environment:
             messages.append("Light: " + str(cell.light))
             messages.append("H20 Density: " + str(cell.h2o))
             for key, val in cell.memory.iteritems():
-                messages.append(key + " : " + val)
+                messages.append(key + " : " + str(val))
             
             messages.append("-----------")
             for message in cell.debug:
