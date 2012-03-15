@@ -6,7 +6,14 @@ def getMem(cell, arg):
         return cell.memory[arg]
     else:
         return None
-def dna_stem(cell):
+        
+def adjAttr(cell, dir, attr):
+    if cell.adjacent[dir] != 'EMPTY':
+        return cell.adjacent[dir].__dict__(attr)
+    else:
+        return 'EMPTY'
+
+#def dna_stem(cell):
     # Automate the behavior of a stem cell.
     # Send water up
     # Send sugar in following directions:
@@ -20,10 +27,11 @@ def dna_stem(cell):
 
 def grass(cell):
     cell.debug = []
+    
     def rpt(message):
         """Put a message in the debug message list"""
         cell.debug.append(message)
-        
+    
     adj = cell.adjacent
     up = adj['UP']; down = adj['DOWN']; right = adj['RIGHT']; left = adj['LEFT']
     mem = cell.memory

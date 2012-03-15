@@ -49,7 +49,7 @@ class Cell:
 
     def __repr__(self):
         """Just makes it a bit easier to see what's going on..."""
-        if self.world = None:
+        if self.world == None:
             return "<Empty Cell>"
         else: 
             try:
@@ -165,29 +165,6 @@ class Cell:
             self.water_sent += water
             self.world.transfer(self, direction, sugar, water)
 
-emptyCell = Cell(None, None, None, 'GENERIC', 0, 0)
-emptyCell.alive             = None
-emptyCell.starving          = None
-emptyCell.used_photo        = None
-emptyCell.debug             = None 
-emptyCell.type              = None
-emptyCell.sugar             = None
-emptyCell.starving          = None
-emptyCell.sugar             = None
-emptyCell.sugar_incoming    = None
-emptyCell.sugar_sent        = None
-emptyCell.water             = None
-emptyCell.water_incoming    = None
-emptycell.water_sent        = None
-emptyCell.sugar_consumption = None
-emptyCell.sugar_max_xfer    = None
-emptyCell.sugar_max         = None
-emptyCell.water_consumption = None
-emptyCell.water_max_xfer    = None
-emptyCell.water_max         = None
-emptyCell.photo_factor      = None
-emptyCell.water_factor      = None 
-emptyCell.color             = None
 
 """===================================================================="""
 
@@ -241,7 +218,7 @@ class Environment:
             if coord in self.cells: # self.cells is indexed by coordinates
                 adjacencies[direction] = self.cells[coord]
             else:
-                adjacencies[direction] = emptyCell
+                adjacencies[direction] = 'EMPTY'
         return adjacencies
         
     def get_free_spaces(self, cell):
