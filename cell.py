@@ -49,7 +49,14 @@ class Cell:
 
     def __repr__(self):
         """Just makes it a bit easier to see what's going on..."""
-        return "<" + self.type + str(self.world.coordinates[self]) + ">"
+        if self.world = None:
+            return "<Empty Cell>"
+        else: 
+            try:
+                return "<" + self.type + str(self.world.coordinates[self]) + ">"
+            except AttributeError:
+                return "<" + self.type + " NOWORLD>"
+            
 
     def set_type_characteristics(self):
         """Uses the info from cell_types.py to set the cell characteristics"""
@@ -108,20 +115,20 @@ class Cell:
         if not self.used_photo: 
             amount = self.light * self.free_spaces * self.photo_factor
             self.water -= amount
-            self.sugar += amount
+            self.sugar += amount * 2
             self.used_photo = True
-        # Currently water converted to sugar at 1:1 ratio.
+        # Currently water converted to sugar at 2:1 ratio.
     
     def divide(self, direction, sugar_transfer, water_transfer, newMemory={}):
         """Spawn a daughter cell in the given direction. 
         
-        New cell starts with specified sugar and water, and memory initialized to newMemory. Note division has additional costs (specified in cell_types.py as COSTS['REPR']). 
+        New cell starts with specified sugar and water, and memory initialized to newMemory. Note division has additional costs (specified in cell_types.py as COSTS['GENERIC']). 
         If the cell doesn't have enough water or sugar for the division, then division will fail but resources will not be lost.
         """
         sugar_transfer = max(0, sugar_transfer)
         water_transfer = max(0, water_transfer)
         if self.adjacent[direction] == 'EMPTY':
-            sugar_cost, water_cost = COSTS['REPR']
+            sugar_cost, water_cost = COSTS['GENERIC']
             if self.sugar >= sugar_transfer + sugar_cost and \
                     self.water >= water_transfer + water_cost:
                   self.sugar -= sugar_transfer + sugar_cost
@@ -131,15 +138,14 @@ class Cell:
         return 1
     
     def specialize(self, new_type):
-        """Generic cells can specialize into a new type of cell."""
-        if self.type == 'GENERIC':
-            sugar_cost, water_cost = COSTS[new_type]
-            if self.water > water_cost and self.sugar > sugar_cost:
-                self.sugar -= sugar_cost
-                self.water -= water_cost
-                self.type = new_type
-                self.set_type_characteristics()
-                self.world.update_cell(self)
+        """Cells can specialize into a new type of cell."""
+        sugar_cost, water_cost = COSTS[new_type]
+        if self.water >= water_cost and self.sugar >= sugar_cost:
+            self.sugar -= sugar_cost
+            self.water -= water_cost
+            self.type = new_type
+            self.set_type_characteristics()
+            self.world.update_cell(self)
                 
     def transfer(self, direction, sugar, water):
         """Transfer sugar and/or water in given direction. 
@@ -158,6 +164,30 @@ class Cell:
             self.sugar_sent += sugar
             self.water_sent += water
             self.world.transfer(self, direction, sugar, water)
+
+emptyCell = Cell(None, None, None, 'GENERIC', 0, 0)
+emptyCell.alive             = None
+emptyCell.starving          = None
+emptyCell.used_photo        = None
+emptyCell.debug             = None 
+emptyCell.type              = None
+emptyCell.sugar             = None
+emptyCell.starving          = None
+emptyCell.sugar             = None
+emptyCell.sugar_incoming    = None
+emptyCell.sugar_sent        = None
+emptyCell.water             = None
+emptyCell.water_incoming    = None
+emptycell.water_sent        = None
+emptyCell.sugar_consumption = None
+emptyCell.sugar_max_xfer    = None
+emptyCell.sugar_max         = None
+emptyCell.water_consumption = None
+emptyCell.water_max_xfer    = None
+emptyCell.water_max         = None
+emptyCell.photo_factor      = None
+emptyCell.water_factor      = None 
+emptyCell.color             = None
 
 """===================================================================="""
 
@@ -180,10 +210,10 @@ class Environment:
         """
         if coordinate in self.cells:
             print "Warning: A cell already exists at coordinate {0}".format(coordinate)
-            #debug()
+            
         elif cell in self.coordinates:
             print "Warning: Cell already exists in coordinate map."
-            #debug()
+            
         else:
             self.cells[coordinate] = cell
             self.coordinates[cell] = coordinate
@@ -209,9 +239,9 @@ class Environment:
         adjacent_coords = {'UP': (x, y+1), 'RIGHT': (x+1, y), 'DOWN': (x, y-1), 'LEFT': (x-1, y)}
         for direction, coord in adjacent_coords.iteritems():
             if coord in self.cells: # self.cells is indexed by coordinates
-                adjacencies[direction] = self.cells[coord].type
+                adjacencies[direction] = self.cells[coord]
             else:
-                adjacencies[direction] = 'EMPTY'
+                adjacencies[direction] = emptyCell
         return adjacencies
         
     def get_free_spaces(self, cell):
@@ -388,13 +418,12 @@ class Environment:
 #For testing purposes...
 world = Environment(screen)
 pygame.init()
-seed_cell = Cell(world, grass, {'role':'origin'}, 'STORE', 1000, 400)
-world.add_cell(seed_cell, (0, -5))
+seed_cell = Cell(world, grass, {'role':'origin'}, 'STORE', 1000, 500)
+world.add_cell(seed_cell, (0, -2))
 world.draw_messageboard(screen, MESSAGE_RECT)
 world.updateDisplay()
 pygame.display.flip()
 
-#debug()
 while running:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
@@ -411,4 +440,4 @@ while running:
             pygame.display.flip()
 
     clock.tick(240)
-    #debug()
+    
