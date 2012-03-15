@@ -12,10 +12,10 @@ from pygame import Rect, Color
 PHOTO_MULT = 1
 WATER_MULT = 1 
 
-SCREEN_WIDTH, SCREEN_HEIGHT = 800, 600
+SCREEN_WIDTH, SCREEN_HEIGHT = 1200, 600
 FIELD_WIDTH, FIELD_HEIGHT = 600, 600
 FIELD_RECT = Rect(0, 0, FIELD_WIDTH, FIELD_HEIGHT)
-MESSAGE_RECT = Rect(600, 0, 800, 600)
+MESSAGE_RECT = Rect(FIELD_WIDTH, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
 GRID_SIZE = 20
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 clock = pygame.time.Clock()
@@ -61,7 +61,7 @@ class Cell:
         else: 
             try:
                 return "<" + self.type + str(self.world.coordinates[self]) + ">"
-            except AttributeError:
+            except AttributeError, KeyError:
                 return "<" + self.type + " NOWORLD>"
             
 
@@ -231,7 +231,7 @@ class Environment:
         x,y = self.coordinates[cell]
         spaces = 0
         for coord in adjacent_coords(x,y).itervalues():
-            if coord not in self.coordinates:
+            if coord not in self.cells:
                 spaces += 1
         return spaces
 
@@ -245,14 +245,16 @@ class Environment:
             self.add_cell(newCell, coordinate)
             
     def transfer(self, cell, direction, sugar, water):
-        x, y = self.coordinates[cell]
-
-        coordinate = adjacent_coords(x, y, direction)
-        if coordinate in self.cells:
-            target = self.cells[coordinate]
-            target.sugar_incoming += sugar
-            target.water_incoming += water
-        else: print "Warning: Bad transfer to coordinate " + str(coordinate)
+        if sugar > 0 or water > 0:
+            x, y = self.coordinates[cell]
+            coordinate = adjacent_coords(x, y, direction)
+            if coordinate in self.cells:
+                target = self.cells[coordinate]
+                target.sugar_incoming += sugar
+                target.water_incoming += water
+                target.debug.append('Recieved {0}, {1} from {2}'.format(sugar, water, cell))
+                cell.debug.append('Sent {0}, {1}, to {2}'.format(sugar, water, target))
+            else: print "Warning: Bad transfer to coordinate " + str(coordinate)
         
     def remove_cell(self, cell):
         coordinate = self.coordinates[cell]
@@ -403,6 +405,8 @@ while running:
                 world.update_cells()
                 world.draw_messageboard(screen, MESSAGE_RECT)
                 pygame.display.flip()
+            if event.key == pygame.K_x:
+                debug()
         elif (  event.type == pygame.MOUSEBUTTONDOWN and
                 pygame.mouse.get_pressed()[0]):
             world.change_selected_cell(pygame.mouse.get_pos())
