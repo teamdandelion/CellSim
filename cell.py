@@ -2,7 +2,7 @@
 import os, sys
 
 from cell_types import COSTS, TYPES_INFO
-from dna import grass
+from dna import dna_grass
 from random import randint
 from pdb import set_trace as debug
 
@@ -390,7 +390,7 @@ class Environment:
 #For testing purposes...
 world = Environment(screen)
 pygame.init()
-seed_cell = Cell(world, grass, {'role':'origin'}, 'STORE', 1000, 500)
+seed_cell = Cell(world, dna_grass, {'role':'origin'}, 'STORE', 1000, 500)
 world.add_cell(seed_cell, (0, -2))
 world.draw_messageboard(screen, MESSAGE_RECT)
 world.updateDisplay()
