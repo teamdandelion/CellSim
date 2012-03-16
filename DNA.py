@@ -1,12 +1,13 @@
 from pdb import set_trace as debug
 from random import random
 
+# Warning: Nothing is done atm to ensure that the children are valid children, i.e. they haven't died...
+
 """Entry Point"""
 def dna_grass(cell):
     """Entry point for the program. Automates cell behavior."""
     if getMem(cell, 'initialized') == 0:
         initialize(cell)
-    manage_resource_flow(cell)
     role = getMem(cell, 'role')
     if role == 0:
         print "Error: Cell has no role!"
@@ -21,44 +22,135 @@ def dna_grass(cell):
         automate_store(cell)
     elif role == 'origin':
         automate_origin(cell)
+    elif role == 'bud':
+        automate_bud(cell)
+    manage_resource_flow(cell)
         
 def initialize(cell):
+    if cell == 'EMPTY':
+        print "ERROR: Failed division"
+        debug()
     if 'growth_sugar' not in cell.memory:
         cell.memory['growth_sugar'] = cell.sugar_consumption * 20
     if 'growth_water' not in cell.memory:
         cell.memory['growth_water'] = cell.water_consumption * 20
-    
-    if 'initSD' in cell.memory:
-        dir = cell.memory['initSD']
-        cell.memory['sugardaddy'] = cell.adjacent[dir]
-        
-    if 'initWD' in cell.memory:
-        dir = cell.memory['initWD']
-        cell.memory['waterdaddy'] = cell.adjacent[dir]
-    
+    if 'sugar_children' not in cell.memory:
+        cell.memory['sugar_children'] = []
+    if 'water_children' not in cell.memory:
+        cell.memory['water_children'] = []
     cell.memory['initialized'] = 1
+    if 'demand' not in cell.memory:
+        cell.memory['demand'] = ((0, 0), (0, 0))
 
 def automate_origin(cell):
-    stem_mem = {'role': 'stem', 'sugardaddy': cell, 'waterdaddy': cell, 'established': 0}
-    root_mem = {'role': 'root', 'sugardaddy': cell, 'established': 0}
-    cell.divide('N', 300, 300, stem_mem)
-    cell.divide('S', 300, 60, root_mem)
+    stem_mem = {'role': 'stem', 'unestablished': 1, 'growth_til_leaf': 2}
+    root_mem = {'role': 'root', 'water_children': [(cell, 'N')], 'growth_dir': 'S', 'root_growth_limit': 1}
+    cell.memory['root_growth_limit'] = 2
+    new_stem = cell.divide('N', 300, 300, stem_mem)
+    new_root = cell.divide('S', 250, 60, root_mem)
     cell.memory['growth_sugar'] = 0
     cell.memory['growth_water'] = 0
+    add_sugar_child(cell, new_stem, 'N')
+    add_water_child(cell, new_stem, 'N')
+    add_sugar_child(cell, new_root, 'S')
     cell.memory['role'] = 'store'
+    initialize(new_stem)
+    initialize(new_root)
 
 def automate_stem(cell):
-    if getMem(cell, 'established') == 0:
+    if getMem(cell, 'unestablished') == 1:
         establish_stem(cell)
     else:
-        pass    
+        if getMem(cell, 'growth_to_bud') == 0 and cell.adjacent['N'] == 'EMPTY':
+            if cell.sugar > 40 and cell.water > 40:
+                new_cell = cell.divide('N', cell.sugar - 30, cell.water - 30, {'role': 'bud'})
+                initialize(new_cell)
+                add_water_child(cell, new_cell, 'N')
+                add_sugar_child(cell, new_cell, 'N')
+                # Get rid of this sugar child once the bud has established itself
+            else:
+                cell.memory['growth_sugar'] = 40
+                cell.memory['growth_water'] = 40
     
+def automate_bud(cell):
+    if getMem(cell.adjacent['S'], 'role') == 'stem':
+        # Bud to the NW, NE, and revert to stem with budcounter
+        if cell.adjacent['NW'] == 'EMPTY':   dir = 'NW'
+        elif cell.adjacent['NE'] == 'EMPTY': dir = 'NE'
+        elif cell.adjacent['N'] == 'EMPTY':  dir = 'N'
+        else: 
+            dir = 'X'
+            debug()
+        if dir in ('NW', 'NE'):
+            if cell.sugar > 40 and cell.water > 40:
+                new_mem = {'role': 'bud', 'growth_dir': dir, 'bud_growth_limit': 5}
+                new_cell = cell.divide(dir, 10, 10, new_mem)
+                initialize(new_cell)
+                add_sugar_child(new_cell, cell, dir)
+                add_water_child(cell, new_cell, dir)
+            else:
+                cell.memory['growth_sugar'] = 40
+                cell.memory['growth_water'] = 40
+        if dir == 'N':
+            cell.memory['role'] = 'stem'
+            cell.memory['growth_to_bud'] = 3
+    else:
+        growth_limit = getMem(cell, 'bud_growth_limit')
+        growth_dir = getMem(cell, 'growth_dir')
+        leafdir = 'X'
+        for dir in outsideDirs(growth_dir):
+            if cell.adjacent[dir] == 'EMPTY':
+                leafdir = dir
+        if leafdir != 'X':
+            grow_leaf(cell, leafdir)
+        elif cell.adjacent[growth_dir] == 'EMPTY' and growth_limit > 0 and can_grow(cell, 40, 40):
+            new_mem = {'role': 'bud', 'growth_dir': growth_dir, 'bud_growth_limit': growth_limit - 1, 'sugar_children': [(cell, oppDir(dir))]}
+            new_bud = cell.divide(growth_dir, 10, 10, new_mem)
+            initialize(new_bud)
+            add_water_child(cell, new_bud, growth_dir)
+                
+def can_grow(cell, sugar_req, water_req):
+    if cell.sugar > sugar_req and cell.water>water_req:
+        cell.memory['growth_sugar'] = 0
+        cell.memory['growth_water'] = 0
+        return True
+    else:
+        cell.memory['growth_sugar'] = sugar_req
+        cell.memory['growth_water'] = water_req
+        return False
+                
+def outsideDirs(dir):
+    if dir in ('NW', 'SW'):
+        return ['N', 'W', 'S']
+    elif dir in ('NE', 'SE'):
+        return ['N', 'E', 'S']
+                
+def grow_leaf(cell, dir):
+    if cell.sugar >= 150 and cell.water >= 80:
+        new_mem = {'role': 'leaf', 'growth_sugar': 110, 'growth_water': 50, 'sugar_children': [(cell, oppDir(dir) )]}
+        new_cell = cell.divide(dir, 120, 50, new_mem)
+        add_water_child(cell, new_cell, dir)
+        initialize(new_cell)
+        cell.memory['growth_sugar'] = 0
+        cell.memory['growth_water'] = 0
+    else:
+        cell.memory['growth_sugar'] = 150
+        cell.memory['growth_water'] = 80
+
 def establish_stem(cell):
-    if cell.light < 3:
+    if cell.adjacent['N'] != 'EMPTY' and getMem(cell.adjacent['N'], 'unestablished') == 0:
+        cell.memory['unestablished'] = 0
+        cell.memory['sugar_children'] = [(cell.adjacent['S'], 'S')]
+        
+    growth_til_leaf = getMem(cell, 'growth_til_leaf')
+    if growth_til_leaf != 0:
         if cell.adjacent['N'] == 'EMPTY':
             if cell.sugar > 40 and cell.water > 40:
-                new_mem = {'role': 'stem', 'sugardaddy': cell, 'established': 0, 'growth_sugar': 200, 'growth_water': 200}
-                cell.divide('N', cell.sugar-30, cell.water-30, new_mem)
+                new_mem = {'role': 'stem', 'unestablished': 1, 'growth_sugar': 200, 'growth_water': 200, 'growth_til_leaf': growth_til_leaf -1}
+                new_cell = cell.divide('N', cell.sugar-30, cell.water-30, new_mem)
+                cell.memory['sugar_children'].append((new_cell, 'N'))
+                cell.memory['water_children'].append((new_cell, 'N'))
+                initialize(new_cell)
                 report(cell, 'Growing up!')
             else:
                 report(cell, 'Not enough resources to grow up!')
@@ -70,18 +162,80 @@ def establish_stem(cell):
             cell.memory['growth_water'] = 0
     else:
         if cell.adjacent['NE'] == 'EMPTY':
-            if cell.sugar > 140 and cell.water > 60:
-            
-            
-                
-def automate_store(cell):
-    pass
+            if cell.sugar > 150 and cell.water > 80:
+                new_mem = {'role': 'leaf', 'growth_sugar': 110, 'growth_water': 50, 'sugar_children': [(cell, 'SW')]}
+                new_cell = cell.divide('NE', 120, 50, new_mem)
+                cell.memory['water_children'].append((new_cell, 'NE'))
+                initialize(new_cell)
+        else:
+            if cell.sugar > 150 and cell.water > 80:
+                new_mem = {'role': 'leaf', 'growth_sugar': 110, 'growth_water': 50, 'sugar_children': [(cell, 'SE')]}
+                new_cell = cell.divide('NW', 120, 50, new_mem)
+                cell.memory['water_children'].append((new_cell, 'NW'))
+                initialize(new_cell)
+                cell.memory['unestablished'] = 0
+                cell.memory['sugar_children'] = [(cell.adjacent['S'], 'S')]
+                cell.memory['growth_to_bud'] = 0
 
+def automate_store(cell):
+    if getMem(cell, 'already_established')==0 and cell.adjacent['N'] != 'EMPTY' and getMem(cell.adjacent['N'], 'unestablished') == 0:
+        cell.memory['unestablished'] = 0
+        cell.memory['sugar_children'] = [(cell.adjacent['S'], 'S')]
+        cell.memory['root_growth_limit'] = 3
+        cell.memory['already_established'] = 1
+    
+    if getMem(cell, 'unestablished') == 0:
+        if cell.adjacent['SE'] == 'EMPTY': dir = 'SE'
+        elif cell.adjacent['SW'] == 'EMPTY': dir = 'SW'
+        else: dir = 'X'
+        if dir != 'X':
+            if cell.sugar > 150 and cell.water > 100:
+                root_mem = {'role': 'root', 'water_children': [(cell, oppDir(dir))], 'growth_dir': dir, 'root_growth_limit': 5}
+                new_root = cell.divide(dir, 110, 60, root_mem)
+                add_sugar_child(cell, new_root, oppDir(dir))
+                initialize(new_root)
+            else:
+                cell.memory['growth_sugar'] = 150
+                cell.memory['growth_water'] = 100
+        else:
+            cell.memory['growth_sugar'] = 0
+            cell.memory['growth_water'] = 0
+        if random() < .02:
+            cell.memory['root_growth_limit'] += 1
+        
+        
 def automate_root(cell):
-    pass
+    if cell.type == 'GENERIC':
+        if cell.sugar > 110:
+            cell.specialize('ROOT')
+        else:
+            cell.memory['growth_sugar'] = 110
+    else:
+        dir = cell.memory['growth_dir']
+        growth_remaining = cell.adjacent[oppDir(dir)].memory['root_growth_limit'] -1 
+        cell.memory['root_growth_limit'] = growth_remaining
+        if cell.adjacent[dir] == 'EMPTY' and growth_remaining > 0:
+            if cell.sugar > 140 and cell.water >= 30:
+                new_mem = {'role': 'root', 'water_children': [(cell, oppDir(dir))], 'root_growth_limit': growth_remaining - 1, 'growth_dir': dir}
+                new_cell = cell.divide(dir, 110, 10, new_mem)
+                initialize(new_cell)
+                cell.memory['sugar_children'].append((new_cell, dir))
+            else:
+                cell.memory['growth_sugar'] = 140
+                cell.memory['growth_water'] = 30
+        else:
+            cell.memory['growth_sugar'] = 0
+            cell.memory['growth_water'] = 0
+
     
 def automate_leaf(cell):
-    pass
+    if cell.type != 'PHOTO' and cell.sugar > 110 and cell.water > 40:
+        cell.specialize('PHOTO')
+    
+    if cell.type == 'PHOTO':
+        cell.memory['growth_sugar'] = 0
+        cell.memory['growth_water'] = 100
+        # Good to keep a substantial reserve of water, if you are a leaf.
 
 """Resource flow functions"""
 
@@ -101,62 +255,69 @@ def manage_resource_flow(cell):
         photo_water = cell.light * cell.free_spaces * cell.photo_factor
         if free_water >= photo_water:
             cell.photosynthesize()
-        min_water += 2 * photo_water
+        free_water -= 2 * photo_water
     
-    adj_sugar_demand, adj_water_demand = get_children_demand(cell)
+    children_sugar_demand, children_water_demand = get_children_demand(cell)
 
-    growth_sugar = getMem(cell, 'growth_sugar')
-    growth_water = getMem(cell, 'growth_water')
+    growth_sugar = getMem(cell, 'growth_sugar') + 1 
+    growth_water = getMem(cell, 'growth_water') + 1 
+    # +1 deals with some issue (related to floats I think) that caused cell.sugar or water to approach growth_sugar but not reach it, preventing conditions from triggering
 
-    if free_sugar < adj_sugar_demand[0]:
+    if free_sugar < children_sugar_demand[0]:
     # Triggers if free sugar is less than the net high_sugar_demand
         report(cell, 'Insufficient free sugar for high demand')
         if free_sugar > 0:
             distribute(cell, free_sugar, 'sugar', 'high')
-        high_sugar_demand = adj_sugar_demand[0] - free_sugar
+        high_sugar_demand = children_sugar_demand[0] - free_sugar
         # Reports a higher demand than sum of adj demands if free sugar is less than zero, a lower one if free sugar is greater than zero
         free_sugar = 0
         
-    elif free_sugar >= adj_sugar_demand[0]:
+    elif free_sugar >= children_sugar_demand[0]:
     # Triggers if there's enough free sugar to satisfy everyone's pressing needs
         report(cell, 'Sufficient sugar for high demand')
-        distribute(cell, adj_sugar_demand[0], 'sugar', 'high')
+        distribute(cell, children_sugar_demand[0], 'sugar', 'high')
         high_sugar_demand = 0
-        free_sugar -= adj_sugar_demand[0]
-      
-    low_sugar_demand = max(adj_sugar_demand[1] + growth_sugar - free_sugar, 0)
+        free_sugar -= children_sugar_demand[0]
     
-    if free_sugar > growth_sugar:
-        amt_to_send = min(adj_sugar_demand[1], free_sugar - growth_sugar)
+    free_sugar -= growth_sugar
+    # Now that we are switching to low demand, the cell's free sugar has to take into account its own growth requirements.
+    
+    low_sugar_demand = max(children_sugar_demand[1] - free_sugar, 0)
+    # As before, free sugar might be negative (in which case low_sugar_demand goes higher than children's demand) or positive (vice versa)
+    
+    if free_sugar > 0:
+        amt_to_send = min(children_sugar_demand[1], free_sugar)
         distribute(cell, amt_to_send, 'sugar', 'low')
         free_sugar -= amt_to_send
     
-        if free_sugar > growth_sugar: #There is free sugar leftover after satisfying low and high demand!
-            distribute(cell, free_sugar-growth_sugar, 'sugar', 'even')
+        if free_sugar > 0: #There is free sugar leftover after satisfying low and high demand!
+            distribute(cell, free_sugar, 'sugar', 'even')
 
-    if free_water < adj_water_demand[0]:
+    if free_water < children_water_demand[0]:
     # Triggers if free water is less than the net high_water_demand
         if free_water > 0:
             distribute(cell, free_water, 'water', 'high')
-        high_water_demand = adj_water_demand[0] - free_water
+        high_water_demand = children_water_demand[0] - free_water
         # Reports a higher demand than sum of adj demands if free water is less than zero, a lower one if free water is greater than zero
         free_water = 0
         
-    elif free_water >= adj_water_demand[0]:
+    elif free_water >= children_water_demand[0]:
     # Triggers if there's enough free water to satisfy everyone's pressing needs
-        distribute(cell, adj_water_demand[0], 'water', 'high')
+        distribute(cell, children_water_demand[0], 'water', 'high')
         high_water_demand = 0
-        free_water -= adj_water_demand[0]
+        free_water -= children_water_demand[0]
       
-    low_water_demand = max(adj_water_demand[1] + growth_water - free_water, 0)
+    free_water -= growth_water
     
-    if free_water > growth_water:
-        amt_to_send = min(adj_water_demand[1], free_water - growth_water)
+    low_water_demand = max(children_water_demand[1] - free_water, 0)
+    
+    if free_water > 0:
+        amt_to_send = min(children_water_demand[1], free_water)
         distribute(cell, amt_to_send, 'water', 'low')
         free_water -= amt_to_send
     
-        if free_water > growth_water: #There is free water leftover after satisfying low and high demand!
-            distribute(cell, free_water-growth_water, 'water', 'even')
+        if free_water > 0: #There is free water leftover after satisfying low and high demand!
+            distribute(cell, free_water, 'water', 'even')
         
     cell.memory['demand'] = ( (high_sugar_demand, low_sugar_demand), (high_water_demand, low_water_demand) )
         
@@ -168,52 +329,21 @@ def get_children_demand(cell):
     high_water_demand = 0
     low_water_demand  = 0
     
-    for adjcell in cell.adjacent.itervalues():
-        if adjcell != 'EMPTY':
-            adj_demand = getMem(adjcell, 'demand')
-            if adj_demand != 0:
-                if getMem(adjcell, 'sugardaddy') == cell:
-                    high_sugar_demand += adj_demand[0][0]
-                    low_sugar_demand  += adj_demand[0][1]
-                if getMem(adjcell, 'waterdaddy') == cell:
-                    high_water_demand += adj_demand[1][0]
-                    low_water_demand  += adj_demand[1][1]
+    if getMem(cell, 'sugar_children') != 0:
+        for (sugar_child, __) in getMem(cell, 'sugar_children'):
+            child_demand = getMem(sugar_child, 'demand')
+            high_sugar_demand += child_demand[0][0]
+            low_sugar_demand  += child_demand[0][1]
+            
+    if getMem(cell, 'water_children') != 0:
+        for (water_child, __) in getMem(cell, 'water_children'):
+            child_demand = getMem(water_child, 'demand')
+            high_water_demand += child_demand[1][0]
+            low_water_demand  += child_demand[1][1]             
     
-    return ( (high_sugar_demand, low_sugar_demand), (high_water_demand, low_water_demand))
+    return ((high_sugar_demand, low_sugar_demand), 
+            (high_water_demand, low_water_demand))
 
-    
-def getCellDemand(cell, adjcell, resource, priority):
-    """Returns how much of (resource at priority) is demanded by adjcell. Returns 0 if adjcell is not the resource-child of cell."""
-    if resource == 'sugar':
-        daddytype = 'sugardaddy'
-    elif resource == 'water':
-        daddytype = 'waterdaddy'
-    else:
-        debug()
-        
-    if getMem(adjcell, daddytype) == cell:
-        demand = getMem(adjcell, 'demand')
-        if demand == 0:
-            return 0
-        else:
-            if resource == 'sugar':
-                demand = demand[0]
-            elif resource == 'water':
-                demand = demand[1]
-            else:
-                debug()
-            
-            if priority == 'high':
-                demand = demand[0]
-            elif priority == 'low':
-                demand = demand[1]
-            else:
-                debug()
-            
-            return demand
-    else:
-        return 0
-        
 def distribute(cell, amount, resource, pattern):
     """Automates distribution of resource (given amount) to adjacent cells according to pattern
     
@@ -225,29 +355,24 @@ def distribute(cell, amount, resource, pattern):
 
     report(cell, 'Distributing {0} {1} in pattern {2}'.format(amount, resource, pattern))
     
+    index1 = int(resource == 'water')
     if pattern in ('high', 'low'):
-        adj_demand = get_children_demand(cell)
-        if resource == 'sugar':
-            adj_demand = adj_demand[0]
-        elif resource == 'water':
-            adj_demand = adj_demand[1]
-        else:
-            debug()
-        if pattern == 'high':
-            adj_demand = adj_demand[0]
-        else:
-            adj_demand = adj_demand[1]
-        
-        if adj_demand == 0:
+        index2 = int(pattern == 'low')
+        demand = get_children_demand(cell)[index1][index2]
+        if demand == 0:
             distribution_factor = 1
         else:
-            distribution_factor = float(amount) / adj_demand
+            distribution_factor = float(amount) / demand
         # The proportion of amount demanded to give to each adjacent cell
         
-        for dir, adjcell in cell.adjacent.iteritems():
-            if adjcell != 'EMPTY':
-                amt_to_send = distribution_factor * getCellDemand(cell, adjcell, resource, pattern)
+        if resource == 'sugar' and getMem(cell, 'sugar_children') != 0:
+            for (sugar_child, dir) in getMem(cell, 'sugar_children'):
+                amt_to_send = getMem(sugar_child, 'demand')[index1][index2] * distribution_factor
                 xferResource(cell, dir, amt_to_send, resource)
+        elif resource == 'water' and getMem(cell, 'water_children') != 0:
+                for (water_child, dir) in getMem(cell, 'water_children'):
+                    amt_to_send = getMem(water_child, 'demand')[index1][index2] * distribution_factor
+                    xferResource(cell, dir, amt_to_send, resource)
     else:
         if pattern != 'even':
             debug()
@@ -265,11 +390,26 @@ def xferResource(cell, dir, amount, resource):
         cell.transfer(dir, amount, 0)
     else:
         cell.transfer(dir, 0, amount)
+        
+def add_sugar_child(cell, child, child_dir):
+    """Note: Takes the direction the child is in, not the direction the parent is in"""
+    if 'sugar_children' not in cell.memory:
+        cell.memory['sugar_children'] = []
+    cell.memory['sugar_children'].append((child, oppDir(child_dir)))
+    
+def add_water_child(cell, child, child_dir):
+    """Note: Takes the direction the child is in, not the direction the parent is in"""
+    if 'water_children' not in cell.memory:
+        cell.memory['water_children'] = []  
+    cell.memory['water_children'].append((child, child_dir))
+
 
 """General functions"""
 
 def getMem(cell, arg):
-    if arg in cell.memory:
+    if cell == 'EMPTY':
+        return 'EMPTY'
+    elif arg in cell.memory:
         return cell.memory[arg]
     else:
         print "Cell " + str(cell) + " attempted to access non-existant memory " + arg
@@ -282,166 +422,12 @@ def adjAttr(cell, dir, attr):
         return 'EMPTY'
 
 
-    
+def oppDir(dir):
+    directions     = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']
+    opp_directions = ['S', 'SW', 'W', 'NW', 'N', 'NE', 'E', 'SE']
+    return opp_directions[directions.index(dir)]
 
 
 def report(cell, message):
     """Put a message in the debug message list"""
     cell.debug.append(message)
-
-def grass(cell):
-    if cell.world.cycles == 10:
-        if cell.adjacent['N'] == 'EMPTY':
-            if cell.adjacent['E'] != 'EMPTY':
-                cell.memory['sugardaddy'] = cell.adjacent['E']
-            else:
-                cell.memory['sugardaddy'] = None
-        else:
-            cell.memory['sugardaddy'] = cell.adjacent['N']
-        
-        if cell.adjacent['S'] == 'EMPTY':
-            if cell.adjacent['W'] != 'EMPTY':
-                cell.memory['waterdaddy'] = cell.adjacent['W']
-            else:
-                cell.memory['waterdaddy'] = None
-        else:
-            cell.memory['waterdaddy'] = cell.adjacent['S']
-        
-        cell.memory['demand'] = ( (0,0), (0,0))
-        initializeCell(cell)
-    
-    elif cell.world.cycles > 10:
-        cell.debug = ['Managing resource flows.']
-        manage_resource_flow(cell)
-    else:
-            
-        adj = cell.adjacent
-        mem = cell.memory
-        type = cell.type
-    
-        if 'role' in mem:
-            role = mem['role']
-        else:
-            report(cell, 'No role found!')
-            role = None
-            
-        if type == 'ROOT':
-            # Root should transfer sugar down (if something is below) and transfer water up.
-            # Later: Deal with capacity issues thru specialization, etc
-            # Later: Intelligently don't grow beyond capacity limit
-            if adj['S'] == 'EMPTY':
-                if cell.sugar > 30 and cell.water >= 20:
-                    cell.divide('S', 10, 0, {'role': 'root'})
-                    report(cell, 'Dividing down')
-            else:
-                sugar_to_xfer = max(0, cell.sugar - 30)
-                cell.transfer('S', sugar_to_xfer, 0)
-                report(cell, 'xfer {0} sugar down'.format(sugar_to_xfer))
-                    
-            if cell.sugar < 200 or adj['S'] != 'EMPTY':
-                amt_to_xfer = cell.water
-                cell.transfer('N', 0, amt_to_xfer)
-                report(cell, 'xfer {0} water up'.format(amt_to_xfer))
-            
-                
-        
-        elif type == 'GENERIC':
-            if role == 'stem':
-                if 'num_leaves' not in mem and adj['N'] != 'EMPTY':
-                    report(cell, 'Sending {0} water up'.format(cell.water))
-                    cell.transfer('N', 0, cell.water)
-                    
-                if cell.light <= 3 and adj['N'] == 'EMPTY':
-                    min_sugar = 15
-                    min_water = 5
-                    if cell.sugar > 20 + 2 * min_sugar and cell.water > 30: # Ensures parent and child both have min sugar after division
-                        cell.divide('N', cell.sugar - min_sugar - 20, cell.water - 20, {'role': 'stem'})
-                        report(cell, 'Growing up')
-                    # No point making a leaf here, let's grow higher
-                if cell.light > 3:
-                    if 'num_leaves' not in mem:
-                        if cell.sugar > 140 and cell.water > 140:
-                            cell.divide('E', 120, 130, {'role': 'leaf'})  
-                            mem['num_leaves'] = '1'
-                    elif mem['num_leaves'] == '1':
-                        mem['established'] = 'yes'
-                        water_to_leaf = min(cell.water-5, 15)
-                        cell.transfer('E', 0, water_to_leaf)
-                        report(cell, str(water_to_leaf) + ' water to leaf')
-                        if cell.sugar > 140 and cell.water > 140:
-                            cell.divide('W', 110, 130, {'role': 'leaf'})
-                            mem['num_leaves'] = '2'
-                            
-                if adj['N'] != 'EMPTY' and 'established' in adj['N'].memory:
-                    cell.memory['established'] = 'yes'
-                    
-                    
-                    
-                if 'established' in mem:
-                    dir = 'S'
-                else:
-                    dir = 'N'
-                
-                if 'num_leaves' in mem and mem['num_leaves'] == '1':
-                    report(cell, 'Xfer ' + str(cell.sugar //2) + ' ' + dir)
-                    cell.transfer(dir, cell.sugar // 2, 0)
-                    cell.memory['growth_sugar'] = 180
-                elif cell.sugar > 15 and adj[dir] != 'EMPTY':
-                    cell.transfer(dir, cell.sugar-15, 0)   
-                    
-            if role == 'leaf':
-                if cell.sugar > 100 and cell.water > 20:
-                    cell.specialize('PHOTO')
-    
-                    
-            if role == 'root':
-                if cell.sugar > 100:
-                    report(cell, 'Spec to root')
-                    cell.specialize('ROOT')
-                else:
-                    report(cell, 'Need sugar')
-                
-        elif type == 'STORE':
-            if role == 'origin':
-                if adj['S'] == 'EMPTY':
-                    cell.divide('S', 270, 60, {'role': 'root'})
-                    report(cell, 'New root below!')
-                if adj['N'] == 'EMPTY':
-                    cell.divide('N', 280, 300, {'role': 'stem'})
-                    report(cell, 'New stem above!')
-                    
-                if adj['N'] != 'EMPTY' and adj['S'] != 'EMPTY' and cell.sugar < 45:
-                    mem['role'] = 'stem'
-                    cell.specialize('GENERIC') # Don't need a store early in the game, and it consumes too much
-                if cell.water > 30:
-                    cell.transfer('N', 0, cell.water - 30)
-                
-                if 'established' in mem:
-                    # When cell is well-established, sugar reaching the store is sent down to expand the roots
-                    dir = 'S'
-    
-                else:
-                    # When cell isn't yet established, sugar in the store is sent up to get photosynthesis going.
-                    dir = 'N'
-                    
-                if cell.sugar > 30:
-                    cell.transfer(dir, min(cell.sugar - 40, 200), 0)
-                    
-        elif type == 'PHOTO':
-            if cell.water > cell.free_spaces * cell.light * cell.photo_factor + 15:
-                cell.photosynthesize()
-            
-            if cell.sugar > 10:
-                if adj['E'] != 'EMPTY': dir = 'E'
-                elif adj['W'] != 'EMPTY': dir = 'W'
-                else: dir = 'NONE'
-                if dir != 'NONE':
-                    cell.transfer(dir, cell.sugar - 10, 0)
-                    report(cell, 'Sent ' + str(cell.sugar - 10) + ' to stem')
-                
-                
-
-        
-                
-    
-        

@@ -61,8 +61,8 @@ class Cell:
         else: 
             try:
                 return "<" + self.type + str(self.world.coordinates[self]) + ">"
-            except AttributeError, KeyError:
-                return "<" + self.type + " NOWORLD>"
+            except (AttributeError, KeyError):
+                return "<DEAD>"
             
 
     def set_type_characteristics(self):
@@ -119,10 +119,11 @@ class Cell:
     def photosynthesize(self):
         """Converts water into sugar, if the cell is photosynthetic and there's light and free adjacent spaces"""
         if not self.used_photo: 
-            amount = self.light * self.free_spaces * self.photo_factor
+            amount = self.light * self.free_spaces * self.photo_factor * 3
             self.water -= amount
             self.sugar += amount * 2
             self.used_photo = True
+            self.debug.append('Used photo: generated {0} sugar'.format(amount*2))
         # Currently water converted to sugar at 2:1 ratio.
     
     def divide(self, direction, sugar_transfer, water_transfer, newMemory={}):
@@ -139,9 +140,12 @@ class Cell:
                     self.water >= water_transfer + water_cost:
                   self.sugar -= sugar_transfer + sugar_cost
                   self.water -= water_transfer + water_cost
-                  self.world.add_daughter(self, direction, sugar_transfer, water_transfer, newMemory)
-                  return 0
-        return 1
+                  return self.world.add_daughter(self, direction, sugar_transfer, water_transfer, newMemory)
+                  
+        else:  
+            print "Warning: Bad division!!!"
+            debug()
+            return 'EMPTY'
     
     def specialize(self, new_type):
         """Cells can specialize into a new type of cell."""
@@ -157,12 +161,14 @@ class Cell:
         """Transfer sugar and/or water in given direction. 
         
         Limited by sugar, water available, the maximum transfer limits. If there is no cell in the given direction or that cell is already overloaded, then resources will be wasted.
+        
+        NOTE: Transfer limits currently disabled.
         """
         sugar = max(sugar, 0)
         water = max(water, 0)
         if self.adjacent[direction] != 'EMPTY':
-            sugar = min(sugar, self.sugar, self.sugar_max_xfer - self.sugar_sent)
-            water = min(water, self.water, self.water_max_xfer - self.water_sent)
+            sugar = min(sugar, self.sugar)
+            water = min(water, self.water)
             # Makes sure that the cell can't send more than its xfer limit, and that it can't
             # reduce its store below 0
             self.sugar -= sugar
@@ -208,13 +214,13 @@ class Environment:
         """Returns the water density at a cell's location"""
         x,y = self.coordinates[cell]
         if y > 0: return 0
-        else: return -y
+        else: return -y + 5
         
     def get_light(self, cell):
         """Returns the light intensity at a cell's location"""
         x,y = self.coordinates[cell]
         if y < 0: return 0
-        else: return y 
+        else: return 1
         
     def get_adjacent(self, cell):
         """Returns a dictionary of cells adjacent to the given cell."""
@@ -243,6 +249,12 @@ class Environment:
         if coordinate not in self.coordinates:
             newCell = Cell(self, program, newMemory, 'GENERIC', init_sugar, init_water)
             self.add_cell(newCell, coordinate)
+            for adjcell in self.get_adjacent(newCell).itervalues():
+                if adjcell != 'EMPTY':
+                    adjcell.update_world_state()
+            return newCell
+        else:
+            return 'EMPTY'
             
     def transfer(self, cell, direction, sugar, water):
         if sugar > 0 or water > 0:
@@ -266,6 +278,9 @@ class Environment:
             
         del self.coordinates[cell]
         del self.cells[coordinate]
+        for adjcell in cell.adjacent.itervalues():
+            if adjcell != 'EMPTY':
+                adjcell.update_world_state()
         
     def update_cells(self):
         self.cycles += 1
@@ -395,7 +410,8 @@ world.add_cell(seed_cell, (0, -2))
 world.draw_messageboard(screen, MESSAGE_RECT)
 world.updateDisplay()
 pygame.display.flip()
-
+autoRunning = False
+tick_amount = 500
 while running:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
@@ -407,11 +423,24 @@ while running:
                 pygame.display.flip()
             if event.key == pygame.K_x:
                 debug()
+            if event.key == pygame.K_q:
+                running = False
+            if event.key == pygame.K_g:
+                if autoRunning:
+                    tick_amount = 500
+                else:
+                    tick_amount = 6
+                autoRunning = not(autoRunning)
         elif (  event.type == pygame.MOUSEBUTTONDOWN and
                 pygame.mouse.get_pressed()[0]):
             world.change_selected_cell(pygame.mouse.get_pos())
             world.draw_messageboard(screen, MESSAGE_RECT)
             pygame.display.flip()
-
-    clock.tick(240)
+            
+    if autoRunning:
+        world.update_cells()
+        world.draw_messageboard(screen, MESSAGE_RECT)
+        pygame.display.flip()
+        
+    clock.tick(tick_amount)
     
