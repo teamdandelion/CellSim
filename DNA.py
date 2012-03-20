@@ -27,9 +27,6 @@ def dna_grass(cell):
     manage_resource_flow(cell)
         
 def initialize(cell):
-    if cell == 'EMPTY':
-        print "ERROR: Failed division"
-        debug()
     if 'growth_sugar' not in cell.memory:
         cell.memory['growth_sugar'] = cell.sugar_consumption * 20
     if 'growth_water' not in cell.memory:
@@ -54,6 +51,7 @@ def automate_origin(cell):
     add_water_child(cell, new_stem, 'N')
     add_sugar_child(cell, new_root, 'S')
     cell.memory['role'] = 'store'
+    cell.memory['unestablished'] = 1
     initialize(new_stem)
     initialize(new_root)
 
@@ -61,7 +59,7 @@ def automate_stem(cell):
     if getMem(cell, 'unestablished') == 1:
         establish_stem(cell)
     else:
-        if getMem(cell, 'growth_to_bud') == 0 and cell.adjacent['N'] == 'EMPTY':
+        if getMem(cell, 'growth_to_bud') == 0 and isEmpty(cell, 'N'):
             if cell.sugar > 40 and cell.water > 40:
                 new_cell = cell.divide('N', cell.sugar - 30, cell.water - 30, {'role': 'bud'})
                 initialize(new_cell)
@@ -75,9 +73,9 @@ def automate_stem(cell):
 def automate_bud(cell):
     if getMem(cell.adjacent['S'], 'role') == 'stem':
         # Bud to the NW, NE, and revert to stem with budcounter
-        if cell.adjacent['NW'] == 'EMPTY':   dir = 'NW'
-        elif cell.adjacent['NE'] == 'EMPTY': dir = 'NE'
-        elif cell.adjacent['N'] == 'EMPTY':  dir = 'N'
+        if   isEmpty(cell, 'NW'): dir = 'NW'
+        elif isEmpty(cell, 'NE'): dir = 'NE'
+        elif isEmpty(cell, 'N' ): dir = 'N'
         else: 
             dir = 'X'
             debug()
@@ -99,11 +97,11 @@ def automate_bud(cell):
         growth_dir = getMem(cell, 'growth_dir')
         leafdir = 'X'
         for dir in outsideDirs(growth_dir):
-            if cell.adjacent[dir] == 'EMPTY':
+            if isEmpty(cell, dir):
                 leafdir = dir
         if leafdir != 'X':
             grow_leaf(cell, leafdir)
-        elif cell.adjacent[growth_dir] == 'EMPTY' and growth_limit > 0 and can_grow(cell, 40, 40):
+        elif isEmpty(cell, growth_dir) and growth_limit > 0 and can_grow(cell, 40, 40):
             new_mem = {'role': 'bud', 'growth_dir': growth_dir, 'bud_growth_limit': growth_limit - 1, 'sugar_children': [(cell, oppDir(dir))]}
             new_bud = cell.divide(growth_dir, 10, 10, new_mem)
             initialize(new_bud)
@@ -138,13 +136,13 @@ def grow_leaf(cell, dir):
         cell.memory['growth_water'] = 80
 
 def establish_stem(cell):
-    if cell.adjacent['N'] != 'EMPTY' and getMem(cell.adjacent['N'], 'unestablished') == 0:
+    if 'N' in cell.adjacent and getMem(cell.adjacent['N'], 'unestablished') == 0:
         cell.memory['unestablished'] = 0
         cell.memory['sugar_children'] = [(cell.adjacent['S'], 'S')]
         
     growth_til_leaf = getMem(cell, 'growth_til_leaf')
     if growth_til_leaf != 0:
-        if cell.adjacent['N'] == 'EMPTY':
+        if isEmpty(cell, 'N'):
             if cell.sugar > 40 and cell.water > 40:
                 new_mem = {'role': 'stem', 'unestablished': 1, 'growth_sugar': 200, 'growth_water': 200, 'growth_til_leaf': growth_til_leaf -1}
                 new_cell = cell.divide('N', cell.sugar-30, cell.water-30, new_mem)
@@ -161,7 +159,7 @@ def establish_stem(cell):
             cell.memory['growth_sugar'] = 0
             cell.memory['growth_water'] = 0
     else:
-        if cell.adjacent['NE'] == 'EMPTY':
+        if isEmpty(cell, 'NE'):
             if cell.sugar > 150 and cell.water > 80:
                 new_mem = {'role': 'leaf', 'growth_sugar': 110, 'growth_water': 50, 'sugar_children': [(cell, 'SW')]}
                 new_cell = cell.divide('NE', 120, 50, new_mem)
@@ -178,15 +176,15 @@ def establish_stem(cell):
                 cell.memory['growth_to_bud'] = 0
 
 def automate_store(cell):
-    if getMem(cell, 'already_established')==0 and cell.adjacent['N'] != 'EMPTY' and getMem(cell.adjacent['N'], 'unestablished') == 0:
+    if getMem(cell, 'already_established')==0 and not isEmpty(cell, 'N') and getMem(cell.adjacent['N'], 'unestablished') == 0:
         cell.memory['unestablished'] = 0
         cell.memory['sugar_children'] = [(cell.adjacent['S'], 'S')]
         cell.memory['root_growth_limit'] = 3
         cell.memory['already_established'] = 1
     
     if getMem(cell, 'unestablished') == 0:
-        if cell.adjacent['SE'] == 'EMPTY': dir = 'SE'
-        elif cell.adjacent['SW'] == 'EMPTY': dir = 'SW'
+        if isEmpty(cell, 'SE'): dir = 'SE'
+        elif isEmpty(cell, 'SW'): dir = 'SW'
         else: dir = 'X'
         if dir != 'X':
             if cell.sugar > 150 and cell.water > 100:
@@ -212,9 +210,10 @@ def automate_root(cell):
             cell.memory['growth_sugar'] = 110
     else:
         dir = cell.memory['growth_dir']
-        growth_remaining = cell.adjacent[oppDir(dir)].memory['root_growth_limit'] -1 
+        parent_root = cell.adjacent[oppDir(dir)]
+        growth_remaining = parent_root.memory['root_growth_limit'] - 1 
         cell.memory['root_growth_limit'] = growth_remaining
-        if cell.adjacent[dir] == 'EMPTY' and growth_remaining > 0:
+        if isEmpty(cell, dir) and growth_remaining > 0:
             if cell.sugar > 140 and cell.water >= 30:
                 new_mem = {'role': 'root', 'water_children': [(cell, oppDir(dir))], 'root_growth_limit': growth_remaining - 1, 'growth_dir': dir}
                 new_cell = cell.divide(dir, 110, 10, new_mem)
@@ -381,8 +380,7 @@ def distribute(cell, amount, resource, pattern):
         amt_to_send = float(amount) / num_adjacent_cells
         
         for dir, adjcell in cell.adjacent.iteritems():
-            if adjcell != 'EMPTY':
-                xferResource(cell, dir, amt_to_send, resource)
+            xferResource(cell, dir, amt_to_send, resource)
                 
         
 def xferResource(cell, dir, amount, resource):
@@ -406,27 +404,30 @@ def add_water_child(cell, child, child_dir):
 
 """General functions"""
 
+def isEmpty(cell, dir):
+    """Reports if cell's adjacent space is empty (True) or filled (false)"""
+    if dir in cell.adjacent:
+        return False
+    else:
+        return True
+
 def getMem(cell, arg):
-    if cell == 'EMPTY':
-        return 'EMPTY'
-    elif arg in cell.memory:
+    if arg in cell.memory:
         return cell.memory[arg]
     else:
         print "Cell " + str(cell) + " attempted to access non-existant memory " + arg
         return 0
         
 def adjAttr(cell, dir, attr):
-    if cell.adjacent[dir] != 'EMPTY':
+    if dir in cell.adjacent:
         return cell.adjacent[dir].__dict__(attr)
     else:
-        return 'EMPTY'
-
+        return 0
 
 def oppDir(dir):
     directions     = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']
     opp_directions = ['S', 'SW', 'W', 'NW', 'N', 'NE', 'E', 'SE']
     return opp_directions[directions.index(dir)]
-
 
 def report(cell, message):
     """Put a message in the debug message list"""

@@ -27,3 +27,5 @@ SEED_INFO   =   {'S_CONSUMPTION': 0, 'S_XFER': 0,  'S_MAX': 100000,
 
 TYPES_INFO = {'GENERIC': GENERIC_INFO, 'ROOT': ROOT_INFO, 'PHOTO': PHOTO_INFO, 
               'VASCULAR': VASCULAR_INFO, 'STORE': STORE_INFO, 'SEED': SEED_INFO}
+              
+# Xfer limits currently disabled in program.

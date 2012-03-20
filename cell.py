@@ -109,7 +109,7 @@ class Cell:
         self.h2o = self.world.get_water(self)
         # Get light and water values each cycle because they may change (with the weather)
         self.adjacent = self.world.get_adjacent(self)
-        self.free_spaces = self.world.get_free_spaces(self)
+        self.free_spaces = 8 - len(self.adjacent)
                 
     def die(self):
         """Kills the cell. Useful to make space"""
@@ -134,7 +134,7 @@ class Cell:
         """
         sugar_transfer = max(0, sugar_transfer)
         water_transfer = max(0, water_transfer)
-        if self.adjacent[direction] == 'EMPTY':
+        if direction not in self.adjacent:
             sugar_cost, water_cost = COSTS['GENERIC']
             if self.sugar >= sugar_transfer + sugar_cost and \
                     self.water >= water_transfer + water_cost:
@@ -145,7 +145,6 @@ class Cell:
         else:  
             print "Warning: Bad division!!!"
             debug()
-            return 'EMPTY'
     
     def specialize(self, new_type):
         """Cells can specialize into a new type of cell."""
@@ -166,7 +165,7 @@ class Cell:
         """
         sugar = max(sugar, 0)
         water = max(water, 0)
-        if self.adjacent[direction] != 'EMPTY':
+        if direction in self.adjacent:
             sugar = min(sugar, self.sugar)
             water = min(water, self.water)
             # Makes sure that the cell can't send more than its xfer limit, and that it can't
@@ -229,17 +228,7 @@ class Environment:
         for direction, coord in adjacent_coords(x,y).iteritems():
             if coord in self.cells: # self.cells is indexed by coordinates
                 adjacencies[direction] = self.cells[coord]
-            else:
-                adjacencies[direction] = 'EMPTY'
         return adjacencies
-        
-    def get_free_spaces(self, cell):
-        x,y = self.coordinates[cell]
-        spaces = 0
-        for coord in adjacent_coords(x,y).itervalues():
-            if coord not in self.cells:
-                spaces += 1
-        return spaces
 
     def add_daughter(self, cell, direction, init_sugar, init_water, newMemory={}):
         x, y = self.coordinates[cell]
@@ -250,11 +239,11 @@ class Environment:
             newCell = Cell(self, program, newMemory, 'GENERIC', init_sugar, init_water)
             self.add_cell(newCell, coordinate)
             for adjcell in self.get_adjacent(newCell).itervalues():
-                if adjcell != 'EMPTY':
-                    adjcell.update_world_state()
+                adjcell.update_world_state()
             return newCell
         else:
-            return 'EMPTY'
+            # Attempted to divide into a spot where a cell already existed
+            debug()
             
     def transfer(self, cell, direction, sugar, water):
         if sugar > 0 or water > 0:
@@ -279,8 +268,7 @@ class Environment:
         del self.coordinates[cell]
         del self.cells[coordinate]
         for adjcell in cell.adjacent.itervalues():
-            if adjcell != 'EMPTY':
-                adjcell.update_world_state()
+            adjcell.update_world_state()
         
     def update_cells(self):
         self.cycles += 1
